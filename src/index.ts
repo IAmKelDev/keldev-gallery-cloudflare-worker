@@ -13,6 +13,7 @@ function json(data: unknown, status = 200): Response {
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
+		const DEFAULT_PAGE_SIZE = 20;
 		const url = new URL(request.url);
 
 		if (request.method === 'OPTIONS') {
@@ -23,10 +24,22 @@ export default {
 			return json({ error: 'Method not allowed' }, 405);
 		}
 
-		// GET /images or GET /images?tag=<name> or GET /images?id=<photo-id>
+		// Any of the following:
+		// - GET /gallery/images
+		// - GET /gallery/images?tag=<name>
+		// - GET /gallery/images?id=<image-id>
+		// - GET /gallery/images?page=<page-num>&pagesize=<images-per-page>
 		if (url.pathname === '/gallery/images') {
 			const id = url.searchParams.get('id');
 			const tag = url.searchParams.get('tag');
+			const sizeParam = Number.parseInt(url.searchParams.get('pagesize') ?? "", 10);
+			const pageSize = (sizeParam > 0)
+				? sizeParam
+				: (sizeParam < -1 || !Number.isInteger(sizeParam))
+					? DEFAULT_PAGE_SIZE
+					: -1;
+			const pageNum = Number.parseInt(url.searchParams.get('page') ?? "", 10);
+			const offset = (pageNum - 1) * pageSize || 0;
 
 			if (id) {
 				const img = await env.DB.prepare('SELECT * FROM images WHERE id = ?').bind(id).first<Record<string, unknown>>();
@@ -52,13 +65,15 @@ export default {
 					`SELECT i.* FROM images i
 					 JOIN image_tags it ON it.image_id = i.id
 					 WHERE it.tag = ?
-					 ORDER BY i.taken_at DESC`
+					 ORDER BY i.taken_at DESC
+					 LIMIT ?
+					 OFFSET ?`
 				)
-					.bind(tag)
+					.bind(tag, pageSize, offset)
 					.all();
 				images = result.results as Record<string, unknown>[];
 			} else {
-				const result = await env.DB.prepare('SELECT * FROM images ORDER BY taken_at DESC').all();
+				const result = await env.DB.prepare('SELECT * FROM images ORDER BY taken_at DESC LIMIT ? OFFSET ?').bind(pageSize, offset).all();
 				images = result.results as Record<string, unknown>[];
 			}
 
