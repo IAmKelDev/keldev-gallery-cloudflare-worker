@@ -35,7 +35,7 @@ async function pageOf(imageId: string, pageSize: number, env: Env) {
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
-		const DEFAULT_PAGE_SIZE = 6;
+		const DEFAULT_PAGE_SIZE = 100;
 		const url = new URL(request.url);
 
 		if (request.method === 'OPTIONS') {
